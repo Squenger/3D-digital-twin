@@ -1,0 +1,21 @@
+[project]
+name = "tif-vers-3d"
+version = "0.1.0"
+description = "Reconstruction d'un modèle 3D à partir de tranches TIF successives d'une impression 3D"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=1.24",
+    "tifffile>=2023.1.1",
+    "opencv-python>=4.8",
+    "scikit-image>=0.21",
+    "trimesh>=4.0",
+    "pyglet<2",
+    "scipy>=1.11",
+]
+
+[project.scripts]
+tif-vers-3d = "tif_to_3d:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
