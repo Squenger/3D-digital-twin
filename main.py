@@ -65,13 +65,13 @@ def main() -> None:
 
     
     # Entrées / Sorties 
-    dossier_entree = "/Volumes/KINGSTON/DATA_MICRO_CT/sample 1/Sample 1 15um/S1_15um_Original_cropped"
-    chemin_sortie  = "./sortie/modele.stl"  # Définir à None pour désactiver l'export sur disque
+    dossier_entree = '/Volumes/My Book/3D TWIN AIMINE/DATA MICRO CT/sample 2/Sample 2 15um/S2_15um_Original_cropped'
+    chemin_sortie  = "/Volumes/My Book/3D TWIN AIMINE/DATA MICRO CT/sample 2/Sample 2 15um/OUTPUT/modele2.stl"  # Définir à None pour désactiver l'export sur disque
     
     # Rendu et Post-traitement 
     visualiser  = False  # Affiche la visionneuse 3D interactive après l'export
     plein       = False  # Génère un modèle volumique massif (True) ou surfacique (False)
-    test_rapide = True   # (OPTION DE DEBUG) Teste uniquement sur les 50 tranches centrales !
+    test_rapide = False   # (OPTION DE DEBUG) Teste uniquement sur les 500 premières tranches 
     
     # Paramètres algorithmiques et physiques 
     seuil            = None  # seuil de binarisation manuelle [0-255]. None = automatique (Otsu)
