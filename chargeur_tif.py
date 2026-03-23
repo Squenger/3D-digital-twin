@@ -23,7 +23,7 @@ class ChargeurTif:
         if not self.dossier.is_dir():
             raise NotADirectoryError(f"Dossier introuvable : {self.dossier}")
 
-    def charger(self) -> list[np.ndarray]:
+    def charger(self, test_rapide: bool = False) -> list[np.ndarray]:
         """
         Analyse le dossier, identifie les fichiers image (.tif ou .tiff),
         les trie de manière logique (naturelle) et retourne une liste de tableaux NumPy.
@@ -41,6 +41,11 @@ class ChargeurTif:
             tranches.append(self._lire(f))
             if i % 100 == 0 or i == len(fichiers):
                 print(f"  > {i}/{len(fichiers)} images lues.")
+                
+        if test_rapide and len(tranches) > 200:
+            milieu = len(tranches) // 2
+            tranches = tranches[0: 500]
+            print(f"\n[Chargeur] ⚡️ TEST RAPIDE : On ne garde que les 50 images du milieu (de l'indice {milieu - 25} à {milieu + 24}).")
                 
         return tranches
 

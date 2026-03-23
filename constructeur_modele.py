@@ -45,14 +45,14 @@ class ConstructeurModele:
         else:
             # Approche surfacique : extraction du contour (coque) utilisant les Marching Cubes
             # Application d'un padding (marge artificielle) garantissant un maillage correctement fermé
-            print("Extraction de la surface via Marching Cubes... ( long)")
+            print("Extraction de la surface( long)")
             grille = np.pad(self.voxels, pad_width=1, mode="constant")
     
             sommets, faces, normales, _ = measure.marching_cubes(
                 grille, level=0.5,
                 spacing=(self.epaisseur_couche, self.taille_voxel, self.taille_voxel),
             )
-            print("Finalisation de la géométrie...")
+            print("Finalisation de la géométrie")
             maillage = trimesh.Trimesh(vertices=sommets, faces=faces, vertex_normals=normales, process=True)
 
         print(f"  > Maillage 3D généré ({len(maillage.faces)} faces).")

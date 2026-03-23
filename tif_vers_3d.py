@@ -36,11 +36,13 @@ class TifVers3D:
         taille_voxel: float = 0.1,
         visualiser: bool = False,
         plein: bool = False,
+        test_rapide: bool = False,
     ) -> None:
         self.dossier_entree = Path(dossier_entree)
         self.chemin_sortie = Path(chemin_sortie) if chemin_sortie else None
         self.visualiser = visualiser
         self.plein = plein
+        self.test_rapide = test_rapide
 
         # Initialisation des sous-modules
         self.chargeur    = ChargeurTif(self.dossier_entree)
@@ -49,7 +51,7 @@ class TifVers3D:
         self.exportateur = ExportateurModele()
 
     def executer(self) -> None:
-        tranches = self.chargeur.charger()
+        tranches = self.chargeur.charger(test_rapide=self.test_rapide)
         tranches_bin = self.processeur.traiter_lot(tranches)
         maillage = self.constructeur.construire(tranches_bin, plein=self.plein)
         if self.chemin_sortie:
@@ -67,13 +69,14 @@ def main() -> None:
     chemin_sortie  = "./sortie/modele.stl"  # Définir à None pour désactiver l'export sur disque
     
     # Rendu et Post-traitement 
-    visualiser = False      # Affiche la visionneuse 3D interactive après l'export
-    plein      = False   # Génère un modèle volumique massif (True) ou surfacique (False)
+    visualiser  = False  # Affiche la visionneuse 3D interactive après l'export
+    plein       = False  # Génère un modèle volumique massif (True) ou surfacique (False)
+    test_rapide = True   # (OPTION DE DEBUG) Teste uniquement sur les 50 tranches centrales !
     
     # Paramètres algorithmiques et physiques 
     seuil            = None  # seuil de binarisation manuelle [0-255]. None = automatique (Otsu)
     epaisseur_couche = 0.015   # distance entre deux tranches successives en mm)
-    taille_voxel     = 0.1   #résolution en x y (mm)
+    taille_voxel     = 0.015   #résolution en x y (mm)
 
     try:
         pipeline = TifVers3D(
@@ -84,6 +87,7 @@ def main() -> None:
             taille_voxel=taille_voxel,
             visualiser=visualiser,
             plein=plein,
+            test_rapide=test_rapide,
         )
         pipeline.executer()
         

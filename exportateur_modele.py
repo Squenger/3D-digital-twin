@@ -33,16 +33,16 @@ class ExportateurModele:
         # Traitement spécifique pour le format .glb (nécessite une encapsulation dans une Scene)
         # Pour les autres formats (STL, OBJ, etc.), l'exportation se fait directement sur le maillage
         if ext == ".glb":
-            print("  > Format GLB détecté. Création de la scène...")
+            print("  > Format GLB détecté. Création de la scène")
             donnees = trimesh.scene.Scene(geometry={"modele": maillage}).export(file_type="glb")
         else:
-            print(f"  > Format {ext} détecté. Exportation en cours (long selon la taille)...")
+            print(f"  > Format {ext} détecté. Exportation en cours (long selon la taille)@")
             donnees = maillage.export(file_type=ext.lstrip("."))
 
         if isinstance(donnees, str):
             donnees = donnees.encode()
             
-        print("  > Écriture sur le disque...")
+        print("  > Écriture sur le disque")
         chemin.write_bytes(donnees)
 
         taille_mb = chemin.stat().st_size / (1024 * 1024)
@@ -54,5 +54,5 @@ class ExportateurModele:
         """
         Ouvre une interface 3D interactive.
         """
-        print("\nOuverture de la fenêtre 3D interactive...")
+        print("\nOuverture de la fenêtre 3D interactive")
         maillage.show()
