@@ -5,15 +5,32 @@ Image processing module dedicated to binarization and morphological filtering
 of individual slices prior to their 3D assembly.
 """
 
+import logging
+
 import cv2
 import numpy as np
 from skimage.filters import threshold_multiotsu
+
+logger = logging.getLogger(__name__)
 
 
 class SliceProcessor:
     """
     Class that performs the preprocessing of 2D images (slices).
-    It manages the binarization.
+    It manages the binarization and automatic bounding volume extraction.
+    
+    Attributes
+    ----------
+    threshold : int | None
+        Manual binarization threshold. If None, Multi-Otsu is used.
+    window_size : int
+        Size of the central region used to compute standard deviations (in pixels).
+    std_dev_z : float
+        Standard deviation threshold to determine empty boundaries along the Z axis.
+    std_dev_y : float
+        Standard deviation threshold to determine empty boundaries along the Y axis.
+    std_dev_x : float
+        Standard deviation threshold to determine empty boundaries along the X axis.
     """
 
     def __init__(self, threshold: int | None = None, window_size: int = 400,
@@ -25,14 +42,16 @@ class SliceProcessor:
         self.std_dev_x = std_dev_x
 
     def _determine_bounds(self, slices: list[np.ndarray]) -> tuple[int, int, int, int, int, int]:
-        """ Identifies the boundaries (Z, Y, X) of the sample based on center uniformity. """
+        """ 
+        Identifies the boundaries (Z, Y, X) of the sample based on center uniformity. 
+        """
         if not slices:
             return 0, 0, 0, 0, 0, 0
             
         h, w = slices[0].shape
         depth = len(slices)
         
-        # Center zone coordinates for Z detection
+        # Center zone coordinates for variance detection
         wy = self.window_size // 2
         wx = self.window_size // 2
         
@@ -59,12 +78,8 @@ class SliceProcessor:
         z1_c = max(z_start, z_mid - z_margin)
         z2_c = min(z_end, z_mid + z_margin)
         
-        # Build a 3D volume from the valid Z slices to detect Y/X bounds.
-        # Same principle as Z detection: std across all Z-slices for a given Y/X
-        # is low when that row/column is empty (uniform across Z),
-        # and high when material is present (varies between Z slices).
         vol_3d = np.stack(slices[z1_c:z2_c+1], axis=0).astype(np.float32)  # [Z, H, W]
-        center_img = vol_3d.mean(axis=0)  # also needed by the crop visualization
+        center_img = vol_3d.mean(axis=0)
 
         step = max(1, self.window_size // 20)
 
@@ -105,17 +120,17 @@ class SliceProcessor:
             return []
             
         if skip_auto_crop:
-            print("[Processor] Manual crop mode: skipping auto std_dev bounding. Processing all slices.")
+            logger.info("Manual crop mode: skipping auto std_dev bounding. Processing all slices.")
             valid_slices = slices
         else:
             # Get bounds via uniformity (center standard deviation)
             z1, z2, y1, y2, x1, x2 = self._determine_bounds(slices)
-            print(f"[Processor] Extracting 3D volume: Z[{z1}:{z2}], Y[{y1}:{y2}], X[{x1}:{x2}] (out of {len(slices)} slices).")
+            logger.info(f"Extracting 3D volume: Z[{z1}:{z2}], Y[{y1}:{y2}], X[{x1}:{x2}] (out of {len(slices)} slices).")
             # Crop the image list in 3D
             valid_slices = [s[y1:y2, x1:x2] for s in slices[z1:z2 + 1]]
         
         total = len(valid_slices)
-        print(f"[Processor] Binarizing {total} images...")
+        logger.info(f"Binarizing {total} images...")
         result = []
 
         # 3. Individual binarization of each isolated slice to avoid gaps
@@ -124,15 +139,15 @@ class SliceProcessor:
             result.append(t_bin)
             
             if i % 100 == 0 or i == total:
-                print(f"  > {i}/{total} images binarized.")
+                logger.debug(f"{i}/{total} images binarized.")
                 if progress_callback:
                     # Map the progress from 20% to 70%
                     pct = 20 + 50 * (i / total)
-                    progress_callback(pct, 100, f"Binarisation ({i}/{total})...")
+                    progress_callback(pct, 100, f"Binarization ({i}/{total})...")
                 
         return result
 
-    def _process(self, img: np.ndarray) -> np.ndarray:
+    def _process(self, img: np.ndarray) -> tuple[np.ndarray, float]:
         """
         Passes the slice through binarization phase (material/background separation).
         """

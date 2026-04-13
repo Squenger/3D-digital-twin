@@ -4,11 +4,11 @@ from pathlib import Path
 import tkinter as tk
 from tkinter import filedialog, messagebox
 import trimesh
-from PIL import Image
+from PIL import Image, ImageTk
 import subprocess
 import sys
+import math
 
-import customtkinter as ctk
 
 import customtkinter as ctk
 
@@ -20,9 +20,9 @@ class TifTo3D_GUI(ctk.CTk):
     def __init__(self):
         super().__init__()
 
-        self.title("3D Digital Twin - Reconstruction")
-        self.geometry("800x650")
-        self.minsize(800, 650)
+        self.title("3D Digital Twin - Reconstruction via MICRO CT")
+        self.geometry("800x750")
+        self.minsize(800, 750)
         
         # Grid setup
         self.grid_columnconfigure(0, weight=1)
@@ -48,7 +48,7 @@ class TifTo3D_GUI(ctk.CTk):
         
         # Batch Checkbox
         self.batch_var = ctk.BooleanVar(value=False)
-        self.chk_batch = ctk.CTkCheckBox(self.frame_paths, text="Multiple batch reconstruction", variable=self.batch_var, command=self.toggle_batch_mode)
+        self.chk_batch = ctk.CTkCheckBox(self.frame_paths, text="Multiple reconstruction", variable=self.batch_var, command=self.toggle_batch_mode)
         self.chk_batch.grid(row=0, column=0, columnspan=3, padx=10, pady=10, sticky="w")
         
         # Input folder
@@ -59,7 +59,7 @@ class TifTo3D_GUI(ctk.CTk):
         self.entry_input.grid(row=1, column=1, padx=10, pady=5, sticky="ew")
         self.entry_input.insert(0, '/Volumes/KINGSTON/DATA_MICRO_CT/sample 3/Sample 3 15um/S3_15um_Original')
         
-        self.btn_input = ctk.CTkButton(self.frame_paths, text="Browse...", width=100, command=self.browse_input)
+        self.btn_input = ctk.CTkButton(self.frame_paths, text="Browse", width=100, command=self.browse_input)
         self.btn_input.grid(row=1, column=2, padx=10, pady=5)
         
         # Output folder / file
@@ -70,7 +70,7 @@ class TifTo3D_GUI(ctk.CTk):
         self.entry_output.grid(row=2, column=1, padx=10, pady=5, sticky="ew")
         self.entry_output.insert(0, './sortie/modele3(20).stl')
         
-        self.btn_output = ctk.CTkButton(self.frame_paths, text="Browse...", width=100, command=self.browse_output)
+        self.btn_output = ctk.CTkButton(self.frame_paths, text="Browse", width=100, command=self.browse_output)
         self.btn_output.grid(row=2, column=2, padx=10, pady=5)
 
         # --- Parameters Section ---
@@ -114,7 +114,7 @@ class TifTo3D_GUI(ctk.CTk):
         
         ctk.CTkCheckBox(self.frame_options, text="Fast test (500 slices)", variable=self.fast_test_var).grid(row=0, column=0, padx=10, pady=10, sticky="w")
         ctk.CTkCheckBox(self.frame_options, text="Manual Cropping", variable=self.manual_crop_var).grid(row=1, column=0, padx=10, pady=10, sticky="w")
-        ctk.CTkCheckBox(self.frame_options, text="Solid model (Beta)", variable=self.solid_var).grid(row=2, column=0, padx=10, pady=10, sticky="w")
+        ctk.CTkCheckBox(self.frame_options, text="Solid model (Beta)", variable=self.solid_var, command=self.on_solid_toggle).grid(row=2, column=0, padx=10, pady=10, sticky="w")
         ctk.CTkCheckBox(self.frame_options, text="Open 3D view at the end", variable=self.visualize_var).grid(row=3, column=0, padx=10, pady=10, sticky="w")
         ctk.CTkCheckBox(self.frame_options, text="Estimate Porosity & Extract Slices", variable=self.post_process_var).grid(row=4, column=0, padx=10, pady=10, sticky="w")
         ctk.CTkCheckBox(self.frame_options, text="Generate 3D porosity model", variable=self.gen_porosity_mesh_var).grid(row=5, column=0, padx=10, pady=10, sticky="w")
@@ -188,7 +188,7 @@ class TifTo3D_GUI(ctk.CTk):
         btn_load = ctk.CTkButton(frame_controls, text="Load image folder...", command=self.load_slice_folder)
         btn_load.pack(side="left", padx=10, pady=5)
         
-        # Sélecteur d'axe
+        # Axis Selector
         self.axis_var = ctk.StringVar(value="Z_Axial")
         self.seg_axis = ctk.CTkSegmentedButton(frame_controls, values=["Z_Axial", "Y_Frontal", "X_Sagittal"], variable=self.axis_var, command=self.change_axis)
         self.seg_axis.pack(side="left", padx=10)
@@ -202,14 +202,25 @@ class TifTo3D_GUI(ctk.CTk):
         self.btn_next_slice = ctk.CTkButton(frame_controls, text="Next >>", width=80, command=self.next_slice)
         self.btn_next_slice.pack(side="left", padx=5)
         
-        self.slice_image_label = ctk.CTkLabel(self.tab_vslices, text="No image loaded")
-        self.slice_image_label.grid(row=1, column=0, sticky="nsew", pady=10)
+        # Ruler UI Controls
+        self.ruler_var = ctk.BooleanVar(value=False)
+        self.btn_ruler = ctk.CTkButton(frame_controls, text="Ruler: OFF", width=100, fg_color="gray", command=self.toggle_ruler)
+        self.btn_ruler.pack(side="left", padx=10)
         
-        # Mouse wheel binding for cross sections
-        # Needs to be bound to both the label and the tab just in case
-        self.slice_image_label.bind("<MouseWheel>", self.on_mouse_wheel)
-        self.slice_image_label.bind("<Button-4>", self.on_mouse_wheel)
-        self.slice_image_label.bind("<Button-5>", self.on_mouse_wheel)
+        self.lbl_measure = ctk.CTkLabel(frame_controls, text="Dist: -- mm", text_color="cyan", font=ctk.CTkFont(weight="bold"))
+        self.lbl_measure.pack(side="left", padx=5)
+        
+        self.slice_canvas = tk.Canvas(self.tab_vslices, bg="#2b2b2b", width=600, height=600, highlightthickness=0)
+        self.slice_canvas.grid(row=1, column=0, sticky="nsew", pady=10)
+        
+        self.slice_canvas.bind("<MouseWheel>", self.on_mouse_wheel)
+        self.slice_canvas.bind("<Button-4>", self.on_mouse_wheel)
+        self.slice_canvas.bind("<Button-5>", self.on_mouse_wheel)
+        
+        self.slice_canvas.bind("<ButtonPress-1>", self.on_ruler_press)
+        self.slice_canvas.bind("<B1-Motion>", self.on_ruler_drag)
+        self.slice_canvas.bind("<ButtonRelease-1>", self.on_ruler_release)
+        
         self.tab_vslices.bind("<MouseWheel>", self.on_mouse_wheel)
         self.tab_vslices.bind("<Button-4>", self.on_mouse_wheel)
         self.tab_vslices.bind("<Button-5>", self.on_mouse_wheel)
@@ -217,6 +228,12 @@ class TifTo3D_GUI(ctk.CTk):
         self.slice_files = []
         self.slice_dict = {"Z_Axial": [], "Y_Frontal": [], "X_Sagittal": []}
         self.current_slice_index = 0
+        
+        self.slice_resolutions = {"Z_Axial": (1.0, 1.0), "Y_Frontal": (1.0, 1.0), "X_Sagittal": (1.0, 1.0)}
+        self.ruler_line = None
+        self.ruler_start = (0, 0)
+        self.img_scale = 1.0
+        self.canvas_image_tk = None
 
     def _setup_vis_graphs(self):
         self.tab_vgraphs.grid_columnconfigure(0, weight=1)
@@ -243,9 +260,23 @@ class TifTo3D_GUI(ctk.CTk):
             if files:
                 self.slice_files = files
                 self.current_slice_index = 0
+                
+                try:
+                    v_sz = float(self.entries["voxel_size"].get() or "0.015")
+                    l_tk = float(self.entries["layer_thickness"].get() or "0.015")
+                except ValueError:
+                    v_sz = l_tk = 1.0
+                    
+                self.slice_resolutions = {
+                    "Z_Axial": (v_sz, v_sz),
+                    "Y_Frontal": (v_sz, l_tk),
+                    "X_Sagittal": (v_sz, l_tk)
+                }
+                
                 self.show_current_slice()
             else:
-                self.slice_image_label.configure(text="No valid image found in this folder", image=None)
+                self.slice_canvas.delete("all")
+                self.slice_canvas.create_text(300, 300, text="No valid image found in this folder", fill="white")
                 self.lbl_slice_info.configure(text="0 / 0")
 
     def change_axis(self, value):
@@ -254,7 +285,8 @@ class TifTo3D_GUI(ctk.CTk):
         if self.slice_files:
             self.show_current_slice()
         else:
-            self.slice_image_label.configure(text="No image for this axis", image=None)
+            self.slice_canvas.delete("all")
+            self.slice_canvas.create_text(300, 300, text="No image for this axis", fill="white")
             self.lbl_slice_info.configure(text="0 / 0")
 
     def show_current_slice(self):
@@ -262,13 +294,70 @@ class TifTo3D_GUI(ctk.CTk):
         try:
             path = self.slice_files[self.current_slice_index]
             img = Image.open(path)
-            # Resize for display (max 500x500 approx.)
+            orig_w, orig_h = img.size
+            
+            # Resize for display (max 600x600 approx.)
             img.thumbnail((600, 600))
-            ctk_img = ctk.CTkImage(light_image=img, dark_image=img, size=img.size)
-            self.slice_image_label.configure(image=ctk_img, text="")
+            new_w, new_h = img.size
+            self.img_scale = orig_w / new_w if new_w > 0 else 1.0
+            
+            self.canvas_image_tk = ImageTk.PhotoImage(img)
+            self.slice_canvas.delete("all")
+            self.slice_canvas.create_image(300, 300, image=self.canvas_image_tk, anchor="center")
             self.lbl_slice_info.configure(text=f"{self.current_slice_index + 1} / {len(self.slice_files)}")
+            
+            self.ruler_line = None
+            self.lbl_measure.configure(text="Dist: -- mm")
         except Exception as e:
-            self.slice_image_label.configure(text=f"Loading error: {e}")
+            self.slice_canvas.delete("all")
+            self.slice_canvas.create_text(300, 300, text=f"Loading error: {e}", fill="red")
+
+    def toggle_ruler(self):
+        val = not self.ruler_var.get()
+        self.ruler_var.set(val)
+        if val:
+            self.btn_ruler.configure(text="Ruler: ON", fg_color="green")
+            self.slice_canvas.configure(cursor="crosshair")
+        else:
+            self.btn_ruler.configure(text="Ruler: OFF", fg_color="gray")
+            self.slice_canvas.configure(cursor="arrow")
+            if self.ruler_line:
+                self.slice_canvas.delete(self.ruler_line)
+                self.ruler_line = None
+            self.lbl_measure.configure(text="Dist: -- mm")
+
+    def on_ruler_press(self, event):
+        if not self.ruler_var.get() or not self.slice_files: return
+        self.ruler_start = (event.x, event.y)
+        if self.ruler_line:
+            self.slice_canvas.delete(self.ruler_line)
+        self.ruler_line = self.slice_canvas.create_line(event.x, event.y, event.x, event.y, fill="cyan", width=2)
+        self.lbl_measure.configure(text="Dist: 0.000 mm")
+
+    def on_ruler_drag(self, event):
+        if not self.ruler_var.get() or not self.ruler_line: return
+        self.slice_canvas.coords(self.ruler_line, self.ruler_start[0], self.ruler_start[1], event.x, event.y)
+        self._update_measurement((event.x, event.y))
+
+    def on_ruler_release(self, event):
+        if not self.ruler_var.get() or not self.ruler_line: return
+        self._update_measurement((event.x, event.y))
+
+    def _update_measurement(self, end_pos):
+        dx = end_pos[0] - self.ruler_start[0]
+        dy = end_pos[1] - self.ruler_start[1]
+        
+        dx_orig = dx * self.img_scale
+        dy_orig = dy * self.img_scale
+        
+        axis = self.axis_var.get()
+        res_x, res_y = self.slice_resolutions.get(axis, (1.0, 1.0))
+        
+        real_dx = dx_orig * res_x
+        real_dy = dy_orig * res_y
+        real_dist = math.sqrt(real_dx**2 + real_dy**2)
+        
+        self.lbl_measure.configure(text=f"Dist: {real_dist:.3f} mm")
 
     def next_slice(self):
         if self.slice_files and self.current_slice_index < len(self.slice_files) - 1:
@@ -321,12 +410,32 @@ class TifTo3D_GUI(ctk.CTk):
         if self.batch_var.get():
             path = filedialog.askdirectory()
         else:
-            path = filedialog.asksaveasfilename(defaultextension=".stl", filetypes=[("Stereolithography", "*.stl"), ("All files", "*.*")])
+            if self.solid_var.get():
+                path = filedialog.asksaveasfilename(defaultextension=".step", filetypes=[("STEP CAD", "*.step"), ("All files", "*.*")])
+            else:
+                path = filedialog.asksaveasfilename(defaultextension=".stl", filetypes=[("Stereolithography", "*.stl"), ("All files", "*.*")])
         
         if path:
             self.entry_output.delete(0, 'end')
             self.entry_output.insert(0, path)
             
+    def on_solid_toggle(self):
+        """Automatically suggest .step extension when solid mode is enabled."""
+        current_path = self.entry_output.get().strip()
+        if not current_path: return
+        
+        path = Path(current_path)
+        if self.solid_var.get():
+            if path.suffix.lower() == ".stl":
+                new_path = path.with_suffix(".step")
+                self.entry_output.delete(0, 'end')
+                self.entry_output.insert(0, str(new_path))
+        else:
+            if path.suffix.lower() == ".step":
+                new_path = path.with_suffix(".stl")
+                self.entry_output.delete(0, 'end')
+                self.entry_output.insert(0, str(new_path))
+
     # --- Interactive Features ---
     def interactive_crop_callback(self, slices):
         self._crop_bounds = None
@@ -501,7 +610,7 @@ class TifTo3D_GUI(ctk.CTk):
                         threshold=thresh,
                         layer_thickness=layer_t,
                         voxel_size=voxel_s,
-                        visualize=False,  # Force False in batch to avoid blocking
+                        visualize=False,  
                         solid=solid,
                         fast_test=fast,
                         component_threshold=comp_thresh,
@@ -512,7 +621,8 @@ class TifTo3D_GUI(ctk.CTk):
                         post_process=post,
                         generate_porosity_mesh=gen_por,
                         save_slices=save_sl,
-                        progress_callback=batch_progress
+                        progress_callback=batch_progress,
+                        interactive_crop_callback=self.interactive_crop_callback if self.manual_crop_var.get() else None
                     )
                     pipeline.execute()
                     
@@ -525,7 +635,7 @@ class TifTo3D_GUI(ctk.CTk):
                     threshold=thresh,
                     layer_thickness=layer_t,
                     voxel_size=voxel_s,
-                    visualize=False,  # Always False in thread
+                    visualize=False,  
                     solid=solid,
                     fast_test=fast,
                     component_threshold=comp_thresh,
@@ -556,6 +666,8 @@ class TifTo3D_GUI(ctk.CTk):
                     if hasattr(pipeline, 'generated_slices') and pipeline.generated_slices:
                         if isinstance(pipeline.generated_slices, dict):
                             self.slice_dict = pipeline.generated_slices
+                            if hasattr(pipeline, 'slice_resolutions'):
+                                self.slice_resolutions = pipeline.slice_resolutions
                             cur_ax = self.axis_var.get()
                             self.slice_files = self.slice_dict.get(cur_ax, [])
                         else:

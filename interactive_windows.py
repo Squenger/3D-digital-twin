@@ -7,11 +7,27 @@ from matplotlib.figure import Figure
 from matplotlib.widgets import SpanSelector
 
 class ManualCropWindow(ctk.CTkToplevel):
+    """
+    A popup window allowing manual selection of X, Y, and Z bounds globally
+    based on the geometric projections of the volume.
+    """
     def __init__(self, master, slices, on_confirm_callback):
+        """
+        Initializes the cropping interface tool.
+
+        Parameters
+        ----------
+        master : ctk.CTk
+            The main parent window.
+        slices : list of np.ndarray
+            The loaded raw grayscale images forming the volume grid.
+        on_confirm_callback : callable
+            A function that takes a list of 6 integers `[z1, z2, y1, y2, x1, x2]`
+            representing the new architectural boundary.
+        """
         super().__init__(master)
-        self.title("Manual Cropping (X, Y, Z)")
+        self.title("Manual Cropping Domain (X, Y, Z)")
         self.geometry("900x700")
-        # Ensure the popup stays on top and grabs focus
         self.transient(master)
         self.grab_set()
         
@@ -26,11 +42,11 @@ class ManualCropWindow(ctk.CTkToplevel):
             "X": [0, self.width - 1]
         }
         
-        lbl = ctk.CTkLabel(self, text="Computing projections, please wait...", font=("Arial", 16))
+        lbl = ctk.CTkLabel(self, text="Computing spatial projections, please wait...", font=("Arial", 16))
         lbl.pack(expand=True)
         self.update()
         
-        # Precompute projections
+        # Precompute volumetric projections
         vol = np.stack(slices, axis=0) # [Z, Y, X]
         self.proj_z = np.mean(vol, axis=0) # Shape: [Y, X]
         self.proj_y = np.mean(vol, axis=1) # Shape: [Z, X]
@@ -41,7 +57,7 @@ class ManualCropWindow(ctk.CTkToplevel):
         self.setup_ui()
         
     def setup_ui(self):
-        lbl_inst = ctk.CTkLabel(self, text="Drag your mouse to highlight the region to keep (green highlight).", font=("Arial", 14, "bold"))
+        lbl_inst = ctk.CTkLabel(self, text="Drag your cursor to explicitly isolate the target matter (green highlight).", font=("Arial", 14, "bold"))
         lbl_inst.pack(pady=10)
         
         self.tabview = ctk.CTkTabview(self)
@@ -53,14 +69,12 @@ class ManualCropWindow(ctk.CTkToplevel):
         
         self.selectors = [] 
         
-        # Z Crop: Use X projection [Z, Y]. Vertical axis is Z.
-        self.create_plot(tab_z, self.proj_x, "Z", "vertical", f"Z Axis (0 to {self.depth})")
-        # Y Crop: Use Z projection [Y, X]. Vertical axis is Y.
-        self.create_plot(tab_y, self.proj_z, "Y", "vertical", f"Y Axis (0 to {self.height})")
-        # X Crop: Use Z projection [Y, X]. Horizontal axis is X.
-        self.create_plot(tab_x, self.proj_z, "X", "horizontal", f"X Axis (0 to {self.width})")
+        # View setup
+        self.create_plot(tab_z, self.proj_x, "Z", "vertical", f"Z Dimensional Origin (0 to {self.depth})")
+        self.create_plot(tab_y, self.proj_z, "Y", "vertical", f"Y Dimensional Origin (0 to {self.height})")
+        self.create_plot(tab_x, self.proj_z, "X", "horizontal", f"X Dimensional Origin (0 to {self.width})")
         
-        btn_confirm = ctk.CTkButton(self, text="Confirm Crop", command=self.confirm)
+        btn_confirm = ctk.CTkButton(self, text="Confirm Physical Crop", command=self.confirm)
         btn_confirm.pack(pady=10)
         
     def create_plot(self, parent, image, axis_name, direction, title):
@@ -83,39 +97,51 @@ class ManualCropWindow(ctk.CTkToplevel):
         self.selectors.append(span)
         
     def confirm(self):
-        # Default bounds if not selected
         z1, z2 = self.bounds["Z"]
         y1, y2 = self.bounds["Y"]
         x1, x2 = self.bounds["X"]
         
-        # Return standard format [z_start, z_end, y_start, y_end, x_start, x_end]
         result = [min(z1, z2), max(z1, z2), min(y1, y2), max(y1, y2), min(x1, x2), max(x1, x2)]
         self.on_confirm(result)
         self.destroy()
 
 
 class VarianceSelectorWindow(ctk.CTkToplevel):
+    """
+    An interface tool presenting visual profiles of the physical variance 
+    (standard deviation) computed along structural grid lines. This helps researchers mathematically
+    pinpoint optimal threshold cutoffs for empty space.
+    """
     def __init__(self, master, slices, current_thresholds, on_confirm_callback):
         """
-        current_thresholds: dict with keys 'Z', 'Y', 'X' and float values,
-                            OR a single float (backward compat).
-        on_confirm_callback: called with a dict {'Z': float, 'Y': float, 'X': float}.
+        Initializes the variance selection tool.
+
+        Parameters
+        ----------
+        master : ctk.CTk
+            The main parent window.
+        slices : list of np.ndarray
+            The dataset of image geometries.
+        current_thresholds : dict or float
+            The currently operational limits structured as `{"Z": float, "Y": float, "X": float}` 
+        on_confirm_callback : callable
+            A function receiving the new thresholds dict object upon user confirmation.
         """
         super().__init__(master)
-        self.title("Manual Variance Threshold — Per Axis")
+        self.title("Limit Control — Explicit Variance Analysis (Per Axis)")
         self.geometry("900x720")
         self.transient(master)
         self.grab_set()
         
         self.on_confirm = on_confirm_callback
-        # Support both old single-float and new dict format
+        
         if isinstance(current_thresholds, dict):
             self.thresholds = {k: float(v) for k, v in current_thresholds.items()}
         else:
             t = float(current_thresholds)
             self.thresholds = {"Z": t, "Y": t, "X": t}
         
-        lbl = ctk.CTkLabel(self, text="Computing variance profiles, please wait...", font=("Arial", 16))
+        lbl = ctk.CTkLabel(self, text="Computing standard deviation maps, please wait...", font=("Arial", 16))
         lbl.pack(expand=True)
         self.update()
         
@@ -137,7 +163,6 @@ class VarianceSelectorWindow(ctk.CTkToplevel):
         wy, wx = min(h, 400) // 2, min(w, 400) // 2
         step = max(1, 400 // 20)
         
-        # Z variance: std inside center window for each Z slice
         self.var_z_idx = list(range(depth))
         self.var_z = []
         for i in range(depth):
@@ -145,7 +170,6 @@ class VarianceSelectorWindow(ctk.CTkToplevel):
             val_pix = win[win > 5]
             self.var_z.append(float(np.std(val_pix)) if len(val_pix) > 0 else 0.0)
                 
-        # Y variance: scanning rows of the MIP center image
         self.var_y_idx = list(range(0, h, step))
         self.var_y = []
         for i in self.var_y_idx:
@@ -153,7 +177,6 @@ class VarianceSelectorWindow(ctk.CTkToplevel):
             val_pix = win[win > 5]
             self.var_y.append(float(np.std(val_pix)) if len(val_pix) > 0 else 0.0)
             
-        # X variance: scanning columns of the MIP center image
         self.var_x_idx = list(range(0, w, step))
         self.var_x = []
         for i in self.var_x_idx:
@@ -164,7 +187,7 @@ class VarianceSelectorWindow(ctk.CTkToplevel):
     def setup_ui(self):
         lbl_inst = ctk.CTkLabel(
             self,
-            text="Click on a graph to place the threshold line. Each axis is independent.",
+            text="Explicitly click on a plot profile to assign the minimum deviation cutoff. Axes are mutually independent.",
             font=("Arial", 13, "bold")
         )
         lbl_inst.pack(pady=(10, 5))
@@ -180,7 +203,7 @@ class VarianceSelectorWindow(ctk.CTkToplevel):
             tab = tabview.add(f"Axis {axis_name}")
             self._create_axis_tab(tab, axis_name, x_vals, y_vals)
         
-        btn_confirm = ctk.CTkButton(self, text="Confirm All Thresholds", command=self.confirm)
+        btn_confirm = ctk.CTkButton(self, text="Confirm Theoretical Parameters", command=self.confirm)
         btn_confirm.pack(pady=10)
 
     def _create_axis_tab(self, parent, axis_name, x_vals, y_vals):
@@ -188,18 +211,18 @@ class VarianceSelectorWindow(ctk.CTkToplevel):
 
         fig = Figure(figsize=(8, 4), dpi=100)
         ax = fig.add_subplot(111)
-        ax.plot(x_vals, y_vals, color="steelblue", label=f"{axis_name} Std Dev")
-        hline = ax.axhline(thresh, color='red', linestyle='--', linewidth=1.5, label=f"Threshold ({thresh:.1f})")
-        ax.set_title(f"Variance Profile — Axis {axis_name}")
-        ax.set_xlabel("Slice / Position index")
-        ax.set_ylabel("Standard deviation")
+        ax.plot(x_vals, y_vals, color="steelblue", label=f"{axis_name} Deviation Profile")
+        hline = ax.axhline(thresh, color='red', linestyle='--', linewidth=1.5, label=f"Boundary Cutoff ({thresh:.1f})")
+        ax.set_title(f"Empirical Variance Chart — Domain {axis_name}")
+        ax.set_xlabel("Spatio-Temporal Index")
+        ax.set_ylabel("Standard Deviation Intensity")
         ax.legend()
 
         canvas = FigureCanvasTkAgg(fig, master=parent)
         canvas.draw()
         canvas.get_tk_widget().pack(fill="both", expand=True)
 
-        lbl = ctk.CTkLabel(parent, text=f"Threshold {axis_name}: {thresh:.2f}", font=("Arial", 13, "bold"), text_color="orange")
+        lbl = ctk.CTkLabel(parent, text=f"Limit Parameter {axis_name}: {thresh:.2f}", font=("Arial", 13, "bold"), text_color="orange")
         lbl.pack(pady=4)
 
         def onclick(event, a=axis_name, h=hline, c=canvas, l=lbl):
@@ -207,7 +230,7 @@ class VarianceSelectorWindow(ctk.CTkToplevel):
                 self.thresholds[a] = float(event.ydata)
                 h.set_ydata([event.ydata, event.ydata])
                 c.draw()
-                l.configure(text=f"Threshold {a}: {event.ydata:.2f}")
+                l.configure(text=f"Limit Parameter {a}: {event.ydata:.2f}")
 
         fig.canvas.mpl_connect('button_press_event', onclick)
 

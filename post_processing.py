@@ -5,18 +5,32 @@ post_processing.py
 and mathematical estimation of porosity.
 """
 
+import logging
+import tempfile
+from pathlib import Path
+
 import cv2
 import numpy as np
-from pathlib import Path
-from matplotlib.figure import Figure
-from matplotlib.backends.backend_agg import FigureCanvasAgg
 import scipy.ndimage as ndimage
-import tempfile
+from matplotlib.backends.backend_agg import FigureCanvasAgg
+from matplotlib.figure import Figure
+
+logger = logging.getLogger(__name__)
+
 
 class VolumeAnalyzer:
+    """
+    Class responsible for mathematical porosity analysis and 2D cross-section extraction.
+
+    Attributes
+    ----------
+    voxels : np.ndarray
+        The binarized 3D voxel volume (0s for background, 1s for matter).
+    """
+
     def __init__(self, voxels: np.ndarray):
         """
-        Initializes with the binarized voxel volume (3D matrix of 0s and 1s).
+        Initializes with the binarized voxel volume.
         """
         self.voxels = voxels
 
@@ -25,6 +39,11 @@ class VolumeAnalyzer:
         Calculates the exact internal porosity of the volume.
         It uses morphological hole filling on each slice to find the true solid object
         without its internal pores, avoiding the bounding box empty spaces entirely.
+
+        Returns
+        -------
+        porosity : float
+            The internal porosity expressed as a percentage [0.0 - 100.0].
         """
         matter_volume = 0
         void_volume = 0
@@ -44,8 +63,12 @@ class VolumeAnalyzer:
         
     def get_internal_porosity_voxels(self) -> np.ndarray:
         """
-        Returns a 3D matrix where internal holes are 1 and solid matter is 0.
-        Exterior space remains 0.
+        Computes the internal pores explicitly.
+
+        Returns
+        -------
+        holes_volume : np.ndarray
+            A 3D matrix where internal holes are 1 and solid matter/exterior is 0.
         """
         holes_volume = np.zeros_like(self.voxels)
         for i in range(self.voxels.shape[0]):
@@ -59,6 +82,16 @@ class VolumeAnalyzer:
     def plot_porosity_profiles(self, save_path: str | Path | None = None) -> Path | None:
         """
         Calculates and plots the internal porosity profile slice by slice across all 3 axes.
+
+        Parameters
+        ----------
+        save_path : str | Path | None, optional
+            Where to save the generated PNG plot. If None, it is not saved to disk.
+
+        Returns
+        -------
+        Path | None
+            The Path where the graph was saved, or None if no material was found.
         """
         axis_info = [(0, "Z (Vertical)"), (1, "Y (Frontal)"), (2, "X (Sagittal)")]
         
@@ -112,15 +145,44 @@ class VolumeAnalyzer:
             
         if save_path:
             fig.savefig(save_path, bbox_inches='tight')
-            print(f"  > Porosity profile graphs saved to {save_path}")
+            logger.info(f"Porosity profile graphs saved to {save_path}")
             return Path(save_path)
         else:
             return None
 
-    def export_cross_sections(self, output_folder: str | Path, model_name: str, num_slices: int = 50, save_to_disk: bool = True) -> dict[str, list[Path]]:
+    def export_cross_sections(
+        self, 
+        output_folder: str | Path, 
+        model_name: str, 
+        num_slices: int = 50, 
+        save_to_disk: bool = True,
+        voxel_size: float = 0.015,
+        layer_thickness: float = 0.015
+    ) -> tuple[dict[str, list[Path]], dict[str, tuple[float, float]]]:
         """
         Generates genuine 2D images of the slices within the model on XY and XZ planes (ignoring Z).
-        Returns a dictionary of generated file paths.
+
+        Parameters
+        ----------
+        output_folder : str | Path
+            Directory where the cross sections will be saved.
+        model_name : str
+            Prefix used in naming the exported directory.
+        num_slices : int, optional
+            Number of slices to generate per plane.
+        save_to_disk : bool, optional
+            Whether to write to the permanent user folder or to a temporary folder instead.
+        voxel_size : float, optional
+            Physical X/Y resolution in mm.
+        layer_thickness : float, optional
+            Physical Z resolution in mm.
+
+        Returns
+        -------
+        tuple
+            A tuple containing:
+            - Dictionary mapping to a list of `Path` objects of generated slices.
+            - Dictionary mapping the resolutions (x, y) for each axis.
         """
         if save_to_disk:
             path = Path(output_folder) / f"Cross_Sections_{model_name}"
@@ -128,7 +190,7 @@ class VolumeAnalyzer:
             path = Path(tempfile.gettempdir()) / f"Cross_Sections_Temp_{model_name}"
             
         path.mkdir(parents=True, exist_ok=True)
-        print(f"\n[Post-Processing] Exporting cross sections to: {path}")
+        logger.info(f"Exporting cross sections to: {path}")
         
         axis_info = [(0, "Z_Axial"), (1, "Y_Frontal"), (2, "X_Sagittal")]
         saved_files = {"Z_Axial": [], "Y_Frontal": [], "X_Sagittal": []}
@@ -155,7 +217,7 @@ class VolumeAnalyzer:
             else:
                 depth = x2 - x1 + 1
             
-            # Non-linear sampling: arcsin concentrates points near the center (0)
+            # Non-linear sampling: arcsin concentrates points near the center/edges
             t = np.linspace(-1, 1, num_slices)
             normalized_indices = np.arcsin(t) / np.pi + 0.5
             indices = np.unique((normalized_indices * (depth - 1)).astype(int))
@@ -178,5 +240,12 @@ class VolumeAnalyzer:
                 cv2.imwrite(str(fpath), display_img)
                 saved_files[axis_name].append(fpath)
                 
-        print(f"  > {sum(len(v) for v in saved_files.values())} cross sections generated successfully.")
-        return saved_files
+        total_files = sum(len(v) for v in saved_files.values())
+        logger.info(f"{total_files} cross sections generated successfully.")
+        
+        resolutions = {
+            "Z_Axial": (voxel_size, voxel_size),
+            "Y_Frontal": (voxel_size, layer_thickness),
+            "X_Sagittal": (voxel_size, layer_thickness)
+        }
+        return saved_files, resolutions
