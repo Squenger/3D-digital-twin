@@ -37,17 +37,17 @@ def load_xyz(filepath: str) -> np.ndarray:
     return data[:, :3]
 
 
-def xyz_to_image(data: np.ndarray, resolution: int = None) -> np.ndarray:
+def xyz_to_image(data: np.ndarray, resolution_um: float = 50.0) -> np.ndarray:
     """
-    Convertit un nuage de points X, Y, Z en image 2D (niveaux de gris).
+    Convertit un nuage de points X, Y, Z en image 2D (niveaux de gris),
+    en respectant le ratio d'aspect physique de l'échantillon.
 
     Parameters
     ----------
     data : np.ndarray
-        Tableau (N, 3) avec colonnes X, Y, Z.
-    resolution : int or None
-        Résolution de l'image de sortie (resolution x resolution).
-        Si None, la résolution est déduite automatiquement depuis les données.
+        Tableau (N, 3) avec colonnes X, Y, Z (généralement en millimètres).
+    resolution_um : float
+        Résolution XY voulue en microns (ex: 50.0 µm par pixel).
 
     Returns
     -------
@@ -55,34 +55,35 @@ def xyz_to_image(data: np.ndarray, resolution: int = None) -> np.ndarray:
         Image 2D (float64) avec intensité proportionnelle à Z.
         Les pixels sans données valent 0.
     extent : tuple
-        (x_min, x_max, y_min, y_max) pour l'affichage.
+        (x_min, x_max, y_min, y_max) pour l'affichage physique.
     """
     x, y, z = data[:, 0], data[:, 1], data[:, 2]
 
     x_min, x_max = x.min(), x.max()
     y_min, y_max = y.min(), y.max()
 
-    # Résolution automatique : estimer depuis la densité de points
-    if resolution is None:
-        n_points = len(x)
-        resolution = int(np.sqrt(n_points))
-        resolution = max(resolution, 64)  # minimum 64x64
+    x_range = x_max - x_min
+    y_range = y_max - y_min
+    
+    # Conversion de la résolution de microns vers l'unité des données (ici on assume millimètres)
+    # 50 µm = 0.050 mm
+    res_mm = resolution_um / 1000.0
 
-    # Calculer les indices de pixel pour chaque point
-    # Normaliser X, Y dans [0, resolution-1]
-    x_range = x_max - x_min if x_max != x_min else 1.0
-    y_range = y_max - y_min if y_max != y_min else 1.0
+    # Tailles de la grille (nombre de pixels en X et Y)
+    width_px = int(np.ceil(x_range / res_mm)) if x_range > 0 else 1
+    height_px = int(np.ceil(y_range / res_mm)) if y_range > 0 else 1
 
-    ix = ((x - x_min) / x_range * (resolution - 1)).astype(int)
-    iy = ((y - y_min) / y_range * (resolution - 1)).astype(int)
+    # Normaliser X, Y directement en indices pixels
+    ix = ((x - x_min) / res_mm).astype(int)
+    iy = ((y - y_min) / res_mm).astype(int)
 
-    # Clipper par sécurité
-    ix = np.clip(ix, 0, resolution - 1)
-    iy = np.clip(iy, 0, resolution - 1)
+    # Clipper par sécurité 
+    ix = np.clip(ix, 0, width_px - 1)
+    iy = np.clip(iy, 0, height_px - 1)
 
     # Créer l'image — moyenne des Z si plusieurs points par pixel
-    image = np.zeros((resolution, resolution), dtype=np.float64)
-    count = np.zeros((resolution, resolution), dtype=np.int32)
+    image = np.zeros((height_px, width_px), dtype=np.float64)
+    count = np.zeros((height_px, width_px), dtype=np.int32)
 
     # Accumuler (iy = ligne, ix = colonne)
     np.add.at(image, (iy, ix), z)
@@ -102,7 +103,7 @@ def xyz_to_image(data: np.ndarray, resolution: int = None) -> np.ndarray:
 
 
 def display_and_save(image: np.ndarray, extent: tuple,
-                     output_path: str = None, title: str = "Image 2.5D"):
+                     output_path: str = None, title: str = "Image 2.5D", show_graphics: bool = True):
     """
     Affiche l'image et la sauvegarde optionnellement.
     """
@@ -118,39 +119,44 @@ def display_and_save(image: np.ndarray, extent: tuple,
         fig.savefig(output_path, dpi=150, bbox_inches="tight")
         print(f"Image sauvegardée : {output_path}")
 
-    plt.show()
+    if show_graphics:
+        plt.show()
+    else:
+        plt.close(fig)
 
 
-def main():
-    parser = argparse.ArgumentParser(
-        description="Convertit un fichier XYZ en image 2.5D (niveaux de gris)")
-    parser.add_argument("input", type=str, help="Fichier TXT d'entrée (X Y Z)")
-    parser.add_argument("-o", "--output", type=str, default=None,
-                        help="Chemin de l'image de sortie (PNG)")
-    parser.add_argument("--resolution", type=int, default=None,
-                        help="Résolution de l'image (par défaut : auto)")
-    args = parser.parse_args()
-
+def main(input_path: str | Path, output_path: str | Path = None, resolution_um: float = 50.0, show_graphics: bool = True):
+    input_path = Path(input_path)
+    
     # Charger
-    print(f"Chargement de {args.input} ...")
-    data = load_xyz(args.input)
+    print(f"Chargement de {input_path} ...")
+    data = load_xyz(input_path)
     print(f"  {len(data)} points chargés")
     print(f"  X : [{data[:,0].min():.3f}, {data[:,0].max():.3f}]")
     print(f"  Y : [{data[:,1].min():.3f}, {data[:,1].max():.3f}]")
     print(f"  Z : [{data[:,2].min():.3f}, {data[:,2].max():.3f}]")
 
     # Convertir
-    image, extent = xyz_to_image(data, resolution=args.resolution)
+    image, extent = xyz_to_image(data, resolution_um=resolution_um)
     print(f"  Image : {image.shape[0]}x{image.shape[1]} pixels")
 
     # Nom de sortie par défaut
-    if args.output is None:
-        args.output = str(Path(args.input).with_suffix(".png"))
+    if output_path is None:
+        output_path = input_path.with_suffix(".png")
+    else:
+        output_path = Path(output_path)
 
     # Afficher et sauvegarder
-    title = f"Image 2.5D — {Path(args.input).name}"
-    display_and_save(image, extent, args.output, title)
+    title = f"Image 2.5D — {input_path.name}"
+    display_and_save(image, extent, str(output_path), title, show_graphics=show_graphics)
 
 
 if __name__ == "__main__":
-    main()
+    
+    # ── Configuration ──────────────────────────────────────────────────────────
+    INPUT_PATH = "chemin/vers/fichier.txt"
+    OUTPUT_PATH = None  # Si None, remplacé automatiquement par le même nom en .png
+    RESOLUTION_UM = 50.0  # Résolution de la grille en microns (ex: 50 microns / pixel)
+    SHOW_GRAPHICS = True
+    
+    main(INPUT_PATH, OUTPUT_PATH, RESOLUTION_UM, show_graphics=SHOW_GRAPHICS)
