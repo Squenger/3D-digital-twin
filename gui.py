@@ -621,8 +621,7 @@ class TifTo3D_GUI(ctk.CTk):
                         post_process=post,
                         generate_porosity_mesh=gen_por,
                         save_slices=save_sl,
-                        progress_callback=batch_progress,
-                        interactive_crop_callback=self.interactive_crop_callback if self.manual_crop_var.get() else None
+                        progress_callback=batch_progress
                     )
                     pipeline.execute()
                     
