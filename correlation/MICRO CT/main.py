@@ -48,7 +48,6 @@ def main(sample_path: str | Path, output_dir: str | Path, show_graphics: bool = 
     output_dir = Path(output_dir)
     folder_name = sample_path.name
     
-    print("=== Pipeline Micro-CT: Génération, Sauvegarde & Post-traitement ===")
     output_dir.mkdir(parents=True, exist_ok=True)
     
     # Charger les images => tenseur 3D via MicroCTVolume (sans traitement)
@@ -102,9 +101,14 @@ def main(sample_path: str | Path, output_dir: str | Path, show_graphics: bool = 
 
 if __name__ == "__main__":
 
-    for i in range (9) :
+    #for i in range (9) :
 
-        SAMPLE_PATH = "/Volumes/KINGSTON/DATA_MICRO_CT/sample " + str(i+1) + "/Sample " + str(i+1) + " 15um/S" + str(i+1) + "_15um_Original"
-        OUTPUT_DIR = Path(__file__).parent / "outputs"
+        #SAMPLE_PATH = r"\\tsclient\E\3D TWIN AIMINE\DATA MICRO CT\sample " + str(i+1) + r"\Sample " + str(i+1) + r" 15um\S" + str(i+1) + r"_15um_Original"
+        #OUTPUT_DIR = Path(__file__).parent / "outputs"
         
-        main(SAMPLE_PATH, OUTPUT_DIR, show_graphics=False)
+        #main(SAMPLE_PATH, OUTPUT_DIR, show_graphics=False)
+
+    SAMPLE_PATH = r"\\tsclient\E\3D TWIN AIMINE\DATA MICRO CT\sample 9 15\Sample 9 15um\S9_15um_Original"
+    OUTPUT_DIR = Path(__file__).parent / "outputs"
+        
+    main(SAMPLE_PATH, OUTPUT_DIR, show_graphics=False)

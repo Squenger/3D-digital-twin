@@ -128,6 +128,20 @@ def convex_hull_mask(volume):
     mask_3d_xz = np.repeat(m_xz[:, np.newaxis, :], volume.shape[1], axis=1)
     mask_3d_yz = np.repeat(m_yz[np.newaxis, :, :], volume.shape[0], axis=0)
 
+    target_z = max(mask_3d_xy.shape[0], mask_3d_xz.shape[0], mask_3d_yz.shape[0])
+    target_y = max(mask_3d_xy.shape[1], mask_3d_xz.shape[1], mask_3d_yz.shape[1])
+    target_x = max(mask_3d_xy.shape[2], mask_3d_xz.shape[2], mask_3d_yz.shape[2])
+    target_shape = (target_z, target_y, target_x)
+
+    #  np.pad pour uniformiser les tailles des masques 3D avant combinaison
+    def fix_shape(m, target):
+        paddings = [(0, t - s) for s, t in zip(m.shape, target)]
+        return np.pad(m, paddings, mode='constant')
+
+    mask_3d_xy = fix_shape(mask_3d_xy, target_shape)
+    mask_3d_xz = fix_shape(mask_3d_xz, target_shape)
+    mask_3d_yz = fix_shape(mask_3d_yz, target_shape)
+
     final_mask_3d = (mask_3d_xy > 0) & (mask_3d_xz > 0) & (mask_3d_yz > 0)
     
     indices = np.argwhere(final_mask_3d)
