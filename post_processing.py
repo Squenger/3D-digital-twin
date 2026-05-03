@@ -1,8 +1,5 @@
 """
-post_processing.py
-------------------
-3D volume analysis module: extraction of orthogonal cross slices
-and mathematical estimation of porosity.
+Post-processing: cross-section extraction and porosity analysis.
 """
 
 import logging

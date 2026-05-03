@@ -1,7 +1,5 @@
 """
-model_exporter.py
----------------------
-Module managing the export and interactive visualization of generated 3D models.
+Model export and visualization utilities.
 """
 
 import logging

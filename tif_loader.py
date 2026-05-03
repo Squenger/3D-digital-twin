@@ -1,8 +1,5 @@
 """
-tif_loader.py
----------------
-Module responsible for reading, sorting, and normalizing TIF images
-from a given directory to prepare them for processing.
+TIFF loading and normalization.
 """
 
 import re

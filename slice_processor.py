@@ -1,8 +1,5 @@
 """
-slice_processor.py
-----------------------
-Image processing module dedicated to binarization and morphological filtering
-of individual slices prior to their 3D assembly.
+Binarization and morphological filtering of slices.
 """
 
 import logging

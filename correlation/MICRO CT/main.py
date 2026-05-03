@@ -84,8 +84,8 @@ def main(sample_path: str | Path, output_dir: str | Path, show_graphics: bool = 
     mask = islation_support.extraction_pièce(volume_propre)
     
     print("   -> Masquage Convex Hull et Rognage spatial")
-    processed_tensor = islation_support.convex_hull_mask(mask)
-    
+   # processed_tensor = islation_support.convex_hull_mask(mask)
+    processed_tensor=mask
     print(f"\n-> Tenseur post-traité généré : {processed_tensor.shape}")
 
     # Sauvegarder tenseur post-traité
@@ -108,7 +108,6 @@ if __name__ == "__main__":
         
         #main(SAMPLE_PATH, OUTPUT_DIR, show_graphics=False)
 
-    SAMPLE_PATH = r"\\tsclient\E\3D TWIN AIMINE\DATA MICRO CT\sample 9 15\Sample 9 15um\S9_15um_Original"
+    SAMPLE_PATH = "/Volumes/KINGSTON/DATA_MICRO_CT/sample 1/Sample 1 15um/S1_15um_Original"
     OUTPUT_DIR = Path(__file__).parent / "outputs"
-        
     main(SAMPLE_PATH, OUTPUT_DIR, show_graphics=False)

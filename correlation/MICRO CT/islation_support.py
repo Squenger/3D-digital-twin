@@ -77,7 +77,7 @@ def convex_hull_mask(volume):
     
     _, thresh_xy = cv2.threshold(img_xy, 70, 255, cv2.THRESH_BINARY)
     _, thresh_xz = cv2.threshold(img_xz, 50, 255, cv2.THRESH_BINARY)
-    _, thresh_yz = cv2.threshold(img_yz, 10, 255, cv2.THRESH_BINARY)
+    _, thresh_yz = cv2.threshold(img_yz, 5, 255, cv2.THRESH_BINARY)
 
     thresh_xy[thresh_xy > 20] = 255
     thresh_xz[thresh_xz > 20] = 255

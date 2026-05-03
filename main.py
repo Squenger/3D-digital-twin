@@ -1,9 +1,8 @@
 """
 main.py
---------------
-Main execution pipeline script.
-It handles loading TIF images, binarization, 3D reconstruction,
-and exporting the final physical model via automated CLI arguments.
+-------
+Main script to run the 3D reconstruction pipeline.
+Loads images, binarizes, builds 3D models, and handles exports.
 """
 
 import argparse
@@ -22,14 +21,14 @@ logger = logging.getLogger(__name__)
 
 class TifTo3D:
     """
-    Central orchestration class managing the complete 3D reconstruction pipeline.
+    Main class to manage the 3D reconstruction process.
     
-    Architecture of steps:
-        1. Loading raw data (TifLoader)
-        2. Preprocessing and binarization (SliceProcessor)
-        3. Volume assembly into a continuous Mesh (ModelBuilder)
-        4. Save to disk or geometric visualization (ModelExporter)
-        5. Porosity Analysis (VolumeAnalyzer)
+    Steps:
+        1. Load data (TifLoader)
+        2. Preprocess/Binarize (SliceProcessor)
+        3. Build 3D Mesh (ModelBuilder)
+        4. Export/View (ModelExporter)
+        5. Analyze Porosity (VolumeAnalyzer)
     """
 
     def __init__(
@@ -75,9 +74,7 @@ class TifTo3D:
         self.exporter = ModelExporter()
 
     def execute(self) -> None:
-        """
-        Executes the entire sequential computational pipeline.
-        """
+        """Runs the pipeline."""
         if self.progress_callback: self.progress_callback(0, 100, "Loading raw imaging data...")
         slices = self.loader.load(fast_test=self.fast_test, progress_callback=self.progress_callback)
         
@@ -147,7 +144,7 @@ class TifTo3D:
         if self.visualize:
             self.exporter.visualize(mesh)
             
-        if self.progress_callback: self.progress_callback(100, 100, "Computational sequence complete.")
+        if self.progress_callback: self.progress_callback(100, 100, "Done.")
 
 
 def configure_logging(verbose: bool) -> None:
