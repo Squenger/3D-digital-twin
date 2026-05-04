@@ -1,4 +1,4 @@
-# 3D Digital Twin: Topography-based Prediction
+# 3D Digital Twin: Topography-based Prediction (Work in progress...)
 
 ## Overview
 This project focuses on real-time 3D reconstruction and prediction using topographical data collected during 3D printing. 
